@@ -1,0 +1,31 @@
+# Environment variables
+.env
+gen-lang-client.json
+
+# Python bytecode and compiled files
+__pycache__/
+*.pyc
+
+# Generated essay folders
+essays_to_grade/
+graded_essays/
+
+# Temporary files and directories
+temp/
+
+# Python virtual environment
+venv/
+
+# Log files
+*.log
+
+# SQLite database files
+*.sqlite3
+
+# macOS specific files
+.DS_Store
+
+# PyInstaller build artifacts
+build/
+dist/
+aigrader.spec

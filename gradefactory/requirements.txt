@@ -1,0 +1,10 @@
+google-generativeai
+python-dotenv
+fpdf
+PyPDF2
+pyinstaller
+PyMuPDF
+google-cloud-vision
+pypdfium2
+Pillow
+requests
