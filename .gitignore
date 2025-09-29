@@ -9,6 +9,7 @@ __pycache__/
 # Generated essay folders
 essays_to_grade/
 graded_essays/
+raw_essays_test/
 
 # Temporary files and directories
 temp/
