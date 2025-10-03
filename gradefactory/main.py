@@ -24,7 +24,6 @@ def main():
     # Path and model flags
     parser.add_argument("--input-folder", type=str, help="Path to the folder containing the raw, multi-page PDF essays.")
     parser.add_argument("--rubric", type=str, help="Path to the rubric file (PDF or JSON).")
-    parser.add_argument("--model", type=str, choices=['gemini', 'grok'], default='gemini', help="The AI model to use for grading (gemini or grok). Defaults to gemini.")
     parser.add_argument("--name", action="store_true", help="Use student's name as the filename for processed essays.")
 
     # If no arguments are provided, print help
@@ -52,11 +51,11 @@ def main():
             run_processing(args.input_folder, ESSAYS_TO_GRADE_FOLDER, args.name, xai_api_key)
 
         elif args.grade:
-            run_grading(ESSAYS_TO_GRADE_FOLDER, GRADED_ESSAYS_FOLDER, args.rubric, args.model, xai_api_key)
+            run_grading(ESSAYS_TO_GRADE_FOLDER, GRADED_ESSAYS_FOLDER, args.rubric, xai_api_key)
 
         elif args.full_pipeline:
             run_processing(args.input_folder, ESSAYS_TO_GRADE_FOLDER, args.name, xai_api_key)
-            run_grading(ESSAYS_TO_GRADE_FOLDER, GRADED_ESSAYS_FOLDER, args.rubric, args.model, xai_api_key)
+            run_grading(ESSAYS_TO_GRADE_FOLDER, GRADED_ESSAYS_FOLDER, args.rubric, xai_api_key)
 
     except (ValueError, FileNotFoundError, IOError, RuntimeError) as e:
         print(f"An error occurred: {e}", file=sys.stderr)

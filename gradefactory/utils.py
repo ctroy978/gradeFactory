@@ -3,21 +3,14 @@ import json
 import fitz  # PyMuPDF
 from dotenv import load_dotenv
 from fpdf import FPDF
-import google.generativeai as genai
 
 def load_api_keys():
     """
     Loads API keys from .env file and configures Google Cloud credentials.
-    Returns the XAI API key if found.
+    Returns the XAI API key for grading.
     """
     load_dotenv()
     
-    # Gemini API Key
-    gemini_api_key = os.getenv("GEMINI_API_KEY")
-    if not gemini_api_key:
-        raise ValueError("GEMINI_API_KEY not found in environment variables.")
-    genai.configure(api_key=gemini_api_key)
-
     # Groq (XAI) API Key
     xai_api_key = os.getenv("XAI_API_KEY")
     
@@ -48,15 +41,22 @@ def extract_text_from_pdf(pdf_path):
     except Exception as e:
         raise IOError(f"Error reading PDF file '{pdf_path}': {e}")
 
-def extract_text_from_json(json_path):
+def extract_data_from_json(json_path):
     """
-    Extracts rubric text from a JSON file.
+    Extracts rubric data from a JSON file.
+    Returns a dict with 'rubric', 'question', 'correct_answers'.
     """
     try:
         with open(json_path, 'r') as f:
             data = json.load(f)
-            # Assuming the rubric text is under a 'rubric' key
-            return data.get('rubric', '')
+            rubric = data.get('rubric', '')
+            question = data.get('question', '')
+            correct_answers = data.get('correct_answers', [])
+            return {
+                'rubric': rubric,
+                'question': question,
+                'correct_answers': correct_answers
+            }
     except FileNotFoundError:
         raise FileNotFoundError(f"Error: The file '{json_path}' was not found.")
     except json.JSONDecodeError:
@@ -64,14 +64,21 @@ def extract_text_from_json(json_path):
     except Exception as e:
         raise IOError(f"Error reading JSON file '{json_path}': {e}")
 
-def get_rubric_text(rubric_path):
+def get_rubric_data(rubric_path):
     """
-    Extracts text from a rubric file (PDF or JSON).
+    Extracts data from a rubric file (PDF or JSON).
+    Returns a dict with 'rubric', 'question', 'correct_answers'.
+    PDF rubrics only have rubric text, others empty.
     """
     if rubric_path.lower().endswith('.pdf'):
-        return extract_text_from_pdf(rubric_path)
+        rubric_text = extract_text_from_pdf(rubric_path)
+        return {
+            'rubric': rubric_text,
+            'question': '',
+            'correct_answers': []
+        }
     elif rubric_path.lower().endswith('.json'):
-        return extract_text_from_json(rubric_path)
+        return extract_data_from_json(rubric_path)
     else:
         raise ValueError("Unsupported rubric file format. Please use a .pdf or .json file.")
 
