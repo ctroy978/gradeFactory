@@ -1,6 +1,9 @@
 import os
 import sys
+import csv
+import re
 import concurrent.futures
+from collections import OrderedDict
 import requests
 
 from .prompts import GRADING_PROMPT, MODERATOR_PROMPT
@@ -31,6 +34,68 @@ def moderate_evaluations(api_key, evaluation_a, evaluation_b, rubric_text, quest
     response = requests.post("https://api.x.ai/v1/chat/completions", headers=headers, json=data)
     response.raise_for_status()
     return response.json()['choices'][0]['message']['content']
+
+def parse_score_summary(evaluation_text):
+    """Extracts rubric criterion and total scores (earned, max) from the moderator output."""
+    criterion_pattern = re.compile(r'^\s*([^:\n]+):\s*(\d+(?:\.\d+)?)\s*/\s*(\d+(?:\.\d+)?)\b', re.MULTILINE)
+    total_pattern = re.compile(r'^\s*(?:Total|Overall(?:\s+Score)?|Final\s+Score):\s*(\d+(?:\.\d+)?)\s*/\s*(\d+(?:\.\d+)?)\b', re.IGNORECASE | re.MULTILINE)
+
+    criterion_scores = OrderedDict()
+    for match in criterion_pattern.finditer(evaluation_text):
+        label = match.group(1).strip()
+        if label.lower() == 'total':
+            continue
+        earned = float(match.group(2))
+        maximum = float(match.group(3))
+        if label not in criterion_scores:
+            criterion_scores[label] = (earned, maximum)
+
+    total_score = None
+    total_match = total_pattern.search(evaluation_text)
+    if total_match:
+        total_score = (float(total_match.group(1)), float(total_match.group(2)))
+    elif criterion_scores:
+        earned_sum = sum(score[0] for score in criterion_scores.values())
+        max_sum = sum(score[1] for score in criterion_scores.values())
+        total_score = (earned_sum, max_sum)
+
+    return criterion_scores, total_score
+
+def format_score_tuple(score_tuple):
+    """Converts a (earned, max) tuple to a display string."""
+    if not score_tuple:
+        return ""
+
+    earned, maximum = score_tuple
+
+    def fmt(value):
+        if value is None:
+            return ""
+        if isinstance(value, (int, float)) and float(value).is_integer():
+            return str(int(round(float(value))))
+        if isinstance(value, (int, float)):
+            return f"{value:.2f}".rstrip('0').rstrip('.')
+        return str(value)
+
+    return f"{fmt(earned)}/{fmt(maximum)}"
+
+def save_batch_summary(output_folder, criteria, batch_results):
+    """Writes a CSV table summarizing rubric scores for the batch."""
+    summary_path = os.path.join(output_folder, "batch_scores.csv")
+    header = ["Essay"] + criteria + ["Total"]
+
+    with open(summary_path, 'w', newline='') as csvfile:
+        writer = csv.writer(csvfile)
+        writer.writerow(header)
+        for result in batch_results:
+            row = [result['filename']]
+            for criterion in criteria:
+                score = result['scores'].get(criterion)
+                row.append(format_score_tuple(score))
+            row.append(format_score_tuple(result['total']))
+            writer.writerow(row)
+
+    print(f"\nBatch score summary saved to {summary_path}")
 
 def evaluate_paper(rubric_data, paper_text, xai_api_key):
     """
@@ -70,6 +135,9 @@ def run_grading(input_folder, output_folder, rubric_path, xai_api_key=None):
     if not os.path.isdir(output_folder):
         os.makedirs(output_folder)
 
+    batch_results = []
+    criteria_order = []
+
     for filename in os.listdir(input_folder):
         if filename.lower().endswith(".pdf"):
             paper_path = os.path.join(input_folder, filename)
@@ -87,6 +155,22 @@ def run_grading(input_folder, output_folder, rubric_path, xai_api_key=None):
                 save_to_pdf(evaluation_text, output_path)
                 print(f"  - Saved evaluation to {output_path}")
 
+                criterion_scores, total_score = parse_score_summary(final_evaluation)
+                if criterion_scores:
+                    for criterion in criterion_scores.keys():
+                        if criterion not in criteria_order:
+                            criteria_order.append(criterion)
+                    batch_results.append({
+                        'filename': filename,
+                        'scores': criterion_scores,
+                        'total': total_score
+                    })
+                else:
+                    print("  - Warning: Could not extract score summary for batch table.")
+
             except Exception as e:
                 print(f"Error evaluating {paper_path}: {e}", file=sys.stderr)
+    if batch_results and criteria_order:
+        save_batch_summary(output_folder, criteria_order, batch_results)
+
     print("\n--- Grading Process Complete ---")
